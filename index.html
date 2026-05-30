@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>雙環流光指標卡組件 - 完整交互修復版</title>
+    <title>雙環流光指標卡組件 - 資料本地保存版</title>
     <style>
         /* ==========================================
            1. 環境重置与基本樣式
@@ -307,7 +307,7 @@
                 </div>
                 <div class="btn-group">
                     <button class="btn btn-cancel" id="btnCancel">取消</button>
-                    <button class="btn btn-submit" id="btnSubmit">確認</button>
+                    <button class="btn btn-submit" id="btnSubmit">確認儲存</button>
                 </div>
             </div>
 
@@ -330,17 +330,23 @@
             const inputNum = document.getElementById('inputNum');
             const inputUnit = document.getElementById('inputUnit');
 
+            // 定義 LocalStorage 儲存對應的 Key 值
+            const STORAGE_KEYS = {
+                title: 'double_ring_metric_title',
+                value: 'double_ring_metric_value',
+                unit: 'double_ring_metric_unit'
+            };
+
             /**
              * 數字滾動動畫函式
              * @param {HTMLElement} element - 顯示數字的 DOM 元素
              * @param {number} targetValue - 目標數值
              * @param {number} duration - 動態持續時間 (ms)
              */
-            function animateNumber(element, targetValue, duration = 1000) {
+            function animateNumber(element, targetValue, duration = 1200) {
                 const startTime = performance.now();
                 const startValue = parseFloat(element.textContent) || 0;
                 
-                // 判斷是否含有小數點，用以保持原有的小數點位數精度
                 const hasDecimal = targetValue.toString().includes('.');
                 const decimalPlaces = hasDecimal ? targetValue.toString().split('.')[1].length : 0;
 
@@ -350,7 +356,6 @@
                         element.textContent = targetValue.toFixed(decimalPlaces);
                     } else {
                         const progress = elapsedTime / duration;
-                        // 使用 EaseOutQuad 讓動畫在接近終點時減速，看起來更平滑
                         const easeProgress = progress * (2 - progress); 
                         const currentValue = startValue + (targetValue - startValue) * easeProgress;
                         element.textContent = currentValue.toFixed(decimalPlaces);
@@ -360,14 +365,30 @@
                 requestAnimationFrame(update);
             }
 
-            // 初始化第一次載入時的數字跑動效果
-            const initialTarget = parseFloat(dynamicNum.getAttribute('data-target')) || 0;
-            animateNumber(dynamicNum, initialTarget, 1200);
+            // 【新功能】初始化加載：優先讀取本地歷史快取資料
+            function initLoad() {
+                const savedTitle = localStorage.getItem(STORAGE_KEYS.title);
+                const savedValue = localStorage.getItem(STORAGE_KEYS.value);
+                const savedUnit = localStorage.getItem(STORAGE_KEYS.unit);
 
-            // 點擊數字顯示區：開啟控制選單，並填入當前數據
+                // 如果本地有儲存歷史數據則直接覆蓋，否則維持預設 html 的原始碼數值
+                if (savedTitle !== null) cardTitle.textContent = savedTitle;
+                if (savedUnit !== null) metricUnit.textContent = savedUnit;
+                
+                const targetNum = savedValue !== null ? parseFloat(savedValue) : (parseFloat(dynamicNum.getAttribute('data-target')) || 0);
+                dynamicNum.setAttribute('data-target', targetNum);
+                
+                // 執行初次載入的動態跑動效果
+                animateNumber(dynamicNum, targetNum, 1200);
+            }
+
+            // 執行初始化載入
+            initLoad();
+
+            // 點擊數字顯示區：開啟控制選單，並自動帶入當前畫面上的數據
             centerTrigger.addEventListener('click', () => {
                 inputTitle.value = cardTitle.textContent;
-                inputNum.value = parseFloat(dynamicNum.textContent) || 0;
+                inputNum.value = parseFloat(dynamicNum.getAttribute('data-target')) || 0;
                 inputUnit.value = metricUnit.textContent;
                 
                 editPanel.classList.add('active');
@@ -375,24 +396,32 @@
 
             // 點擊取消按鈕：關閉選單
             btnCancel.addEventListener('click', (e) => {
-                e.stopPropagation(); // 防止事件冒泡
+                e.stopPropagation(); 
                 editPanel.classList.remove('active');
             });
 
-            // 點擊確認按鈕：儲存設定、更新文字並執行數字跑動
+            // 點擊確認儲存：更新前端介面，並將新設定值永久寫入瀏覽器快取
             btnSubmit.addEventListener('click', (e) => {
                 e.stopPropagation();
                 
-                // 更新標題與單位文字
-                cardTitle.textContent = inputTitle.value.trim() || '未命名指標';
-                metricUnit.textContent = inputUnit.value.trim();
+                const finalTitle = inputTitle.value.trim() || '未命名指標';
+                const finalUnit = inputUnit.value.trim();
+                const finalNum = parseFloat(inputNum.value) || 0;
+
+                // 1. 更新前端網頁 DOM 節點內容
+                cardTitle.textContent = finalTitle;
+                metricUnit.textContent = finalUnit;
+                dynamicNum.setAttribute('data-target', finalNum);
                 
-                // 讀取新設定的數值並觸發滾動動畫
-                const newTarget = parseFloat(inputNum.value) || 0;
-                dynamicNum.setAttribute('data-target', newTarget);
-                animateNumber(dynamicNum, newTarget, 1000);
+                // 2. 將修改後的資料永久寫入 LocalStorage
+                localStorage.setItem(STORAGE_KEYS.title, finalTitle);
+                localStorage.setItem(STORAGE_KEYS.unit, finalUnit);
+                localStorage.setItem(STORAGE_KEYS.value, finalNum);
                 
-                // 關閉控制面板
+                // 3. 觸發新數值的數字平滑滾動動畫
+                animateNumber(dynamicNum, finalNum, 1000);
+                
+                // 4. 隱藏控制面板
                 editPanel.classList.remove('active');
             });
         });
