@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>雙環流光指標卡組件 - 資料本地保存版</title>
+    <style>
+        /* ==========================================
+           1. 環境重置与基本樣式
+           ========================================== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            background-color: #0b0f19; /* 僅作測試背景用，組件本身是完全透明的 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px; 
+        }
+
+        /* ==========================================
+           2. 自由縮放外殼
+           ========================================== */
+        .double-ring-card {
+            position: relative;
+            width: 300px;   /* 預設寬度 */
+            height: 300px;  /* 預設高度 */
+            min-width: 240px;  
+            min-height: 240px; 
+            max-width: 600px;  
+            max-height: 600px; 
+            
+            /* 啟用原生自由縮放 */
+            resize: both;
+            overflow: hidden; 
+            
+            background: transparent; /* 背景完全透明 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            
+            /* 宣告為動態排版感應區 */
+            container-type: size;
+        }
+
+        /* 美化並強置渲染右下角的縮放手柄 */
+        .double-ring-card::-webkit-resizer {
+            display: block !important;
+            background: linear-gradient(135deg, transparent 40%, rgba(0, 229, 255, 0.4) 50%, #00e5ff 100%);
+            width: 16px;
+            height: 16px;
+        }
+
+        /* ==========================================
+           3. 雙環流光核心排版
+           ========================================== */
+        .ring-container {
+            position: relative;
+            width: 85cqw;
+            height: 85cqh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-radius: 50%;
+            z-index: 2;
+        }
+
+        /* --- 外環流光 --- */
+        .outer-ring {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, #3370ff, #00e5ff, transparent 60%, #3370ff);
+            animation: rotateRing 3s linear infinite;
+            mask: radial-gradient(transparent 64%, #000 65%);
+            -webkit-mask: radial-gradient(transparent 64%, #000 65%);
+        }
+
+        /* --- 內環流光（反向旋轉） --- */
+        .inner-ring {
+            position: absolute;
+            inset: 10cqw; 
+            border-radius: 50%;
+            background: conic-gradient(from 180deg, #ff007f, #7928ca, transparent 70%, #ff007f);
+            animation: rotateRingReverse 2.5s linear infinite;
+            mask: radial-gradient(transparent 66%, #000 67%);
+            -webkit-mask: radial-gradient(transparent 66%, #000 67%);
+        }
+
+        /* ==========================================
+           4. 中間數字與文字內容
+           ========================================== */
+        .center-content {
+            position: absolute;
+            inset: 16cqw; 
+            background: rgba(17, 24, 27, 0.75); /* 微微提高遮罩不透明度，增強可讀性 */
+            backdrop-filter: blur(4px);
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 5cqw;
+            z-index: 3;
+            cursor: pointer; 
+            transition: background 0.3s, transform 0.2s;
+            user-select: none;
+        }
+
+        .center-content:hover {
+            background: rgba(0, 229, 255, 0.15); /* 懸停發光提示可點擊 */
+            transform: scale(1.02);
+        }
+
+        .card-title {
+            font-size: clamp(10px, 4.5cqw, 15px);
+            color: #9ca3af;
+            font-weight: 500;
+            margin-bottom: 2cqh;
+            white-space: nowrap;
+        }
+
+        .metric-container {
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            max-width: 90%;
+        }
+
+        .metric-number {
+            font-size: clamp(22px, 11cqw, 48px);
+            font-weight: 700;
+            color: #ffffff;
+            font-family: 'Courier New', Courier, monospace;
+            line-height: 1;
+            text-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+        }
+
+        .metric-unit {
+            font-size: clamp(10px, 3.5cqw, 14px);
+            color: #6b7280;
+            margin-left: 2px;
+            white-space: nowrap;
+        }
+
+        .card-footer {
+            margin-top: 2cqh;
+            font-size: clamp(9px, 3.2cqw, 12px);
+            color: #10b981;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        /* ==========================================
+           5. 參數設定控制選單
+           ========================================== */
+        .edit-panel {
+            position: absolute;
+            inset: 0;
+            background: rgba(11, 15, 25, 0.98);
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 12cqw;
+            gap: 1.5cqh;
+            z-index: 10;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease-in-out;
+            border: 1px solid rgba(0, 229, 255, 0.2);
+        }
+
+        .edit-panel.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .edit-panel-title {
+            font-size: clamp(11px, 4cqw, 14px);
+            color: #00e5ff;
+            font-weight: 600;
+            margin-bottom: 1cqh;
+        }
+
+        .form-group {
+            display: flex;
+            align-items: center;
+            width: 85%;
+            gap: 8px;
+        }
+
+        .form-group label {
+            font-size: clamp(10px, 3.2cqw, 12px);
+            color: #9ca3af;
+            width: 35px;
+            flex-shrink: 0;
+            text-align: right;
+        }
+
+        .form-group input {
+            flex: 1;
+            background: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 4px;
+            color: #fff;
+            padding: 3px 8px;
+            font-size: clamp(10px, 3.2cqw, 12px);
+            outline: none;
+            min-width: 0;
+        }
+
+        .form-group input:focus {
+            border-color: #00e5ff;
+            box-shadow: 0 0 5px rgba(0, 229, 255, 0.3);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 1.5cqh;
+            width: 85%;
+            justify-content: flex-end;
+        }
+
+        .btn {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: clamp(10px, 3.2cqw, 11px);
+            cursor: pointer;
+            border: none;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .btn-submit {
+            background: #00e5ff;
+            color: #111827;
+        }
+
+        .btn-submit:hover {
+            background: #00b3cc;
+        }
+
+        .btn-cancel {
+            background: #374151;
+            color: #9ca3af;
+        }
+
+        .btn-cancel:hover {
+            background: #4b5563;
+        }
+
+        /* ==========================================
+           6. 動態特效 Animation
+           ========================================== */
+        @keyframes rotateRing {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes rotateRingReverse {
+            0% { transform: rotate(360deg); }
+            100% { transform: rotate(0deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="double-ring-card">
+        <div class="ring-container">
+            
+            <div class="outer-ring"></div>
+            <div class="inner-ring"></div>
+
+            <div class="center-content" id="centerTrigger" title="點擊修改指標參數">
+                <span class="card-title" id="cardTitle">稼動率指標</span>
+                <div class="metric-container">
+                    <span class="metric-number" id="dynamicNum" data-target="88.5">0</span>
+                    <span class="metric-unit" id="metricUnit">%</span>
+                </div>
+                <span class="card-footer" id="cardTrend">▲ 3.2% (今日)</span>
+            </div>
+
+            <div class="edit-panel" id="editPanel">
+                <div class="edit-panel-title">指標參數設定</div>
+                <div class="form-group">
+                    <label>標題</label>
+                    <input type="text" id="inputTitle">
+                </div>
+                <div class="form-group">
+                    <label>數值</label>
+                    <input type="number" step="0.1" id="inputNum">
+                </div>
+                <div class="form-group">
+                    <label>單位</label>
+                    <input type="text" id="inputUnit">
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-cancel" id="btnCancel">取消</button>
+                    <button class="btn btn-submit" id="btnSubmit">確認儲存</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // DOM 元素獲取
+            const centerTrigger = document.getElementById('centerTrigger');
+            const editPanel = document.getElementById('editPanel');
+            const btnCancel = document.getElementById('btnCancel');
+            const btnSubmit = document.getElementById('btnSubmit');
+            
+            const cardTitle = document.getElementById('cardTitle');
+            const dynamicNum = document.getElementById('dynamicNum');
+            const metricUnit = document.getElementById('metricUnit');
+            
+            const inputTitle = document.getElementById('inputTitle');
+            const inputNum = document.getElementById('inputNum');
+            const inputUnit = document.getElementById('inputUnit');
+
+            // 定義 LocalStorage 儲存對應的 Key 值
+            const STORAGE_KEYS = {
+                title: 'double_ring_metric_title',
+                value: 'double_ring_metric_value',
+                unit: 'double_ring_metric_unit'
+            };
+
+            /**
+             * 數字滾動動畫函式
+             * @param {HTMLElement} element - 顯示數字的 DOM 元素
+             * @param {number} targetValue - 目標數值
+             * @param {number} duration - 動態持續時間 (ms)
+             */
+            function animateNumber(element, targetValue, duration = 1200) {
+                const startTime = performance.now();
+                const startValue = parseFloat(element.textContent) || 0;
+                
+                const hasDecimal = targetValue.toString().includes('.');
+                const decimalPlaces = hasDecimal ? targetValue.toString().split('.')[1].length : 0;
+
+                function update(currentTime) {
+                    const elapsedTime = currentTime - startTime;
+                    if (elapsedTime >= duration) {
+                        element.textContent = targetValue.toFixed(decimalPlaces);
+                    } else {
+                        const progress = elapsedTime / duration;
+                        const easeProgress = progress * (2 - progress); 
+                        const currentValue = startValue + (targetValue - startValue) * easeProgress;
+                        element.textContent = currentValue.toFixed(decimalPlaces);
+                        requestAnimationFrame(update);
+                    }
+                }
+                requestAnimationFrame(update);
+            }
+
+            // 【新功能】初始化加載：優先讀取本地歷史快取資料
+            function initLoad() {
+                const savedTitle = localStorage.getItem(STORAGE_KEYS.title);
+                const savedValue = localStorage.getItem(STORAGE_KEYS.value);
+                const savedUnit = localStorage.getItem(STORAGE_KEYS.unit);
+
+                // 如果本地有儲存歷史數據則直接覆蓋，否則維持預設 html 的原始碼數值
+                if (savedTitle !== null) cardTitle.textContent = savedTitle;
+                if (savedUnit !== null) metricUnit.textContent = savedUnit;
+                
+                const targetNum = savedValue !== null ? parseFloat(savedValue) : (parseFloat(dynamicNum.getAttribute('data-target')) || 0);
+                dynamicNum.setAttribute('data-target', targetNum);
+                
+                // 執行初次載入的動態跑動效果
+                animateNumber(dynamicNum, targetNum, 1200);
+            }
+
+            // 執行初始化載入
+            initLoad();
+
+            // 點擊數字顯示區：開啟控制選單，並自動帶入當前畫面上的數據
+            centerTrigger.addEventListener('click', () => {
+                inputTitle.value = cardTitle.textContent;
+                inputNum.value = parseFloat(dynamicNum.getAttribute('data-target')) || 0;
+                inputUnit.value = metricUnit.textContent;
+                
+                editPanel.classList.add('active');
+            });
+
+            // 點擊取消按鈕：關閉選單
+            btnCancel.addEventListener('click', (e) => {
+                e.stopPropagation(); 
+                editPanel.classList.remove('active');
+            });
+
+            // 點擊確認儲存：更新前端介面，並將新設定值永久寫入瀏覽器快取
+            btnSubmit.addEventListener('click', (e) => {
+                e.stopPropagation();
+                
+                const finalTitle = inputTitle.value.trim() || '未命名指標';
+                const finalUnit = inputUnit.value.trim();
+                const finalNum = parseFloat(inputNum.value) || 0;
+
+                // 1. 更新前端網頁 DOM 節點內容
+                cardTitle.textContent = finalTitle;
+                metricUnit.textContent = finalUnit;
+                dynamicNum.setAttribute('data-target', finalNum);
+                
+                // 2. 將修改後的資料永久寫入 LocalStorage
+                localStorage.setItem(STORAGE_KEYS.title, finalTitle);
+                localStorage.setItem(STORAGE_KEYS.unit, finalUnit);
+                localStorage.setItem(STORAGE_KEYS.value, finalNum);
+                
+                // 3. 觸發新數值的數字平滑滾動動畫
+                animateNumber(dynamicNum, finalNum, 1000);
+                
+                // 4. 隱藏控制面板
+                editPanel.classList.remove('active');
+            });
+        });
+    </script>
+</body>
+</html>
